@@ -9,18 +9,18 @@ number:
 date:
 consensus: true
 v: 3
-area: AREA
-workgroup: WG Working Group
+area: "Security"
+workgroup: "Messaging Layer Security"
 keyword:
   - state encryption
   - key exchange
 venue:
-  group: WG
-  type: Working Group
-  mail: WG@example.com
-  arch: https://example.com/WG
-  github: USER/REPO
-  latest: https://example.com/LATEST
+  group: "Messaging Layer Security"
+  type: "Working Group"
+  mail: "mls@ietf.org"
+  arch: "https://mailarchive.ietf.org/arch/browse/mls/"
+  github: "kkohbrok/draft-kohbrok-storage-layer-security"
+  latest: "https://kkohbrok.github.io/draft-kohbrok-storage-layer-security/draft-kohbrok-mls-storage-layer-security.html"
 
 author:
  -
