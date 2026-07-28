@@ -1,0 +1,2321 @@
+<!DOCTYPE html>
+<html lang="en" class="Internet-Draft">
+<head>
+<meta charset="utf-8">
+<meta content="Common,Latin" name="scripts">
+<meta content="initial-scale=1.0" name="viewport">
+<title>Storage Layer Security</title>
+<meta content="Konrad Kohbrok" name="author">
+<meta content="Raphael Robert" name="author">
+<meta content="
+       This document defines Storage Layer Security (SLS), a component for the
+Messaging Layer Security (MLS) protocol that lets the members of an MLS group
+encrypt data at rest such that access to the data is tied to group membership.
+Members derive a shared storage secret from the MLS key schedule, derive
+per-record wrapping keys from it, and authenticate the resulting set of
+storage records through a hash tree whose root is agreed upon in the MLS
+group context. When the group membership changes, the storage layer is
+re-keyed so that new members gain access and removed members lose access to
+records created after their removal. 
+    " name="description">
+<meta content="xml2rfc 3.34.0" name="generator">
+<meta content="state encryption" name="keyword">
+<meta content="key exchange" name="keyword">
+<meta content="draft-kohbrok-mls-storage-layer-security-latest" name="ietf.draft">
+<!-- Generator version information:
+  xml2rfc 3.34.0
+    Python 3.14.5
+    ConfigArgParse 1.7.5
+    google-i18n-address 3.1.1
+    intervaltree 3.2.1
+    Jinja2 3.1.6
+    lxml 6.1.1
+    natsort 8.4.0
+    platformdirs 4.10.1
+    pycountry 24.6.1
+    PyYAML 6.0.3
+    requests 2.33.1
+    wcwidth 0.8.2
+-->
+<link href="draft-kohbrok-mls-storage-layer-security.xml" rel="alternate" type="application/rfc+xml">
+<link href="#copyright" rel="license">
+<style type="text/css">@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-cyrillic.woff2') format('woff2');
+  unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-cyrillic.woff2') format('woff2');
+  unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Lora SemiBold'), local('Lora-SemiBold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-semibold-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Oxygen Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Oxygen Mono'), local('OxygenMono-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/oxygenmono-regular-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Oxygen Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Oxygen Mono'), local('OxygenMono-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/oxygenmono-regular-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+}
+
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-greek.woff2') format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-greek.woff2') format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  color-scheme: light dark;
+  --background-color: #fff;
+  --text-color: #222;
+  --title-color: #191919;
+  --link-color: #2a6496;
+  --highlight-color: #f9f9f9;
+  --line-color: #eee;
+  --pilcrow-weak: #ddd;
+  --pilcrow-strong: #bbb;
+  --small-font-size: 14.5px;
+  --font-mono: 'Oxygen Mono', monospace;
+  --font-title: "Sofia Sans Semi Condensed", sans-serif;
+  scrollbar-color: #bbb #eee;
+}
+body {
+  max-width: 600px;
+  margin: 75px auto;
+  padding: 0 5px;
+  color: var(--text-color);
+  background-color: var(--background-color);
+  font: 16px/22px "Lora", serif;
+  scroll-behavior: smooth;
+}
+
+.ears {
+  display: none;
+}
+
+/* headings */
+section {
+  clear: both;
+}
+.section-number {
+  padding-right: 0.5em;
+}
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-title);
+  font-weight: 680;
+  margin: 0.8em 0 0.3em;
+  font-size-adjust: 0.5;
+  color: var(--title-color);
+}
+h1 {
+  &#title {
+    font-size: 32px;
+    line-height: 40px;
+    clear: both;
+    margin: 1.5em 0 0.2em;
+  }
+  &#rfcnum {
+    margin: 1.5em 0 0.2em;
+    & + h1#title {
+      margin: 0.2em 0;
+    }
+  }
+}
+
+h1, h2, h3 {
+  font-size: 22px;
+  line-height: 27px;
+}
+h4, h5, h6 {
+  font-size: 20px;
+  line-height: 24px;
+}
+
+/* general structure */
+.author {
+  padding-bottom: 0.3em;
+  vertical-align: top;
+}
+#abstract+p {
+  font-size: 18px;
+  line-height: 24px;
+  & code, & samp, & tt {
+    font-size: 16px;
+    line-height: 0;
+  }
+}
+
+p {
+  padding: 0;
+  margin: 0.5em 0;
+  text-align: left;
+}
+div {
+  margin: 0;
+}
+.alignRight {
+  margin: 1em 0;
+  &.art-text {
+    background-color: var(--highlight-color);
+    border: 1px solid var(--line-color);
+    border-radius: 3px;
+    padding: 0.5em 1em 0;
+    margin-bottom: 0.5em;
+    & pre {
+      padding: 0;
+      width: auto;
+    }
+  }
+  & > *:first-child {
+    border: none;
+    margin: 0;
+    float: right;
+    clear: both;
+  }
+  & > *:nth-child(2) {
+    clear: both;
+    display: block;
+    border: none;
+  }
+}
+svg {
+  display: block;
+  /* font-family isn't space-separated, but =~ will have to do */
+  &[font-family~="monospace" i], & [font-family~="monospace" i] {
+    font-family: var(--font-mono);
+  }
+}
+.alignCenter {
+  margin: 1em 0;
+  &.art-text {
+    background-color: var(--highlight-color);
+    border: 1px solid var(--line-color);
+    border-radius: 3px;
+    padding: 0.5em 1em 0;
+    margin-bottom: 0.5em;
+    & pre {
+      padding: 0;
+      width: auto;
+    }
+  }
+  & > *:first-child {
+    border: none;
+    /* this isn't optimal, but it's an existence proof.  PrinceXML doesn't
+       support flexbox yet.
+    */
+    display: table;
+    margin: 0 auto;
+  }
+}
+
+/* lists */
+ol, ul {
+  padding: 0;
+  margin: 0 0 0.5em 2em;
+  & :is(ol, ul) {
+    margin-left: 1em;
+  }
+}
+li {
+  margin: 0 0 0.25em 0;
+}
+ul.empty, .ulEmpty {
+  list-style-type: none;
+  & li {
+    margin-top: 0.5em;
+  }
+}
+:is(ul, ol).compact, .ulCompact, .olCompact {
+  margin: 0 0 0 2em;
+  & li {
+    margin: 0;
+    & :first-child { margin-top: 0; }
+    & :last-child { margin-bottom: 0; }
+  }
+}
+
+/* definition lists */
+dl {
+  clear: left;
+  --indent: 3ch;
+  /* --indent: attr(indent ch); not supported in any browser, but we can dream */
+  &.olPercent {
+    --indent: 5ch;
+    & > dt {
+      min-width: calc(var(--indent) - 2ch);
+      float: none;
+    }
+  }
+
+  dl > dd > & {
+    margin-top: 0.5em;
+    margin-bottom: 0;
+  }
+
+  &:not(.dlNewline) > dt {
+    float: left;
+    margin-right: 2ch;
+    min-width: 8ch;
+  }
+  & > dd {
+    margin-bottom: .8em;
+    margin-left: var(--indent) !important; /* stupid element overrides */
+    min-height: 2ex;
+  }
+}
+:is(dl.compact, .dlCompact) > dd {
+  margin-bottom: 0;
+  & > :is(:first-child, .break:first-child + *) {
+    margin-top: 0;
+  }
+  & > :is(:last-child) {
+    margin-bottom: 0;
+  }
+}
+:is(dd, span).break {
+  display: none;
+}
+
+/* links */
+a {
+  text-decoration: none;
+  &[href] {
+    color: var(--link-color);
+    &:hover { text-decoration: underline; }
+    &.selfRef {
+      color: var(--text-color);
+      &:hover {
+        text-decoration: none;
+        background-color: var(--highlight-color);
+      }
+    }
+  }
+}
+.iref + a[href].internal {
+  color: var(--text-color);
+}
+a.xref:is(.cite, .auto), :is(#status-of-memo, #copyright) a {
+  white-space: nowrap;
+}
+
+/* Figures */
+tt, code, pre {
+  background-color: var(--highlight-color);
+  font: 14px/22px var(--font-mono);
+}
+tt, code {
+  /* changing the font for inline elements leads to different ascender
+     and descender heights; as we want to retain baseline alignment,
+     remove leading to avoid altering the final height of lines
+     note: this fails if these blocks take an entire line,
+     a different solution would be great */
+  line-height: 0;
+}
+:is(h1, h2, h3, h4, h5, h6) :is(tt, code) {
+  font-size: 84%;
+}
+pre {
+  border: 1px solid var(--line-color);
+  font-size: 13.5px;
+  line-height: 16px;
+  letter-spacing: -0.2px;
+  margin: 5px;
+  padding: 5px;
+}
+img {
+  max-width: 100%;
+}
+figure {
+  margin: 0.5em 0;
+  padding: 0;
+  & blockquote {
+    margin: 0.8em 0.4em 0.4em;
+  }
+}
+figcaption, caption {
+  font-style: italic;
+  margin: 0.5em 1.5em;
+  text-align: left;
+  caption-side: bottom;
+}
+@media screen {
+  /* Auto-collapse boilerplate. */
+  :is(#status-of-memo, #copyright) {
+    & p {
+      margin: -2px 0;
+      max-height: 0;
+      transition: max-height 2s ease, margin 0.5s ease 0.5s;
+      overflow: hidden;
+    }
+    &:hover p,
+    & h2:target ~ p {
+      margin: 0.5em 0;
+      max-height: 500px;
+      overflow: auto;
+    }
+  }
+  pre, svg {
+    display: inline-block;
+    /* In the horizontal direction, sometimes people make over-sized figures.
+       Scrollbars for those is therefore necessary: auto adds them as necessary..
+       In the vertical direction, the line-height can combine with the font
+       asender/descender height to produce scrollbars: hidden avoids that. */
+    overflow: auto hidden;
+  }
+  pre {
+    max-width: 100%;
+    width: calc(100% - 22px - 1em);
+  }
+  svg {
+    max-width: calc(100% - 22px - 1em);
+  }
+  figure pre {
+    display: block;
+    width: calc(100% - 25px);
+  }
+  :is(pre, svg) + .pilcrow {
+    display: inline-block;
+    vertical-align: text-bottom;
+    padding-bottom: 8px;
+  }
+}
+
+/* aside, blockquote */
+aside, blockquote {
+  margin-left: 0;
+  padding: 0 2em;
+  font-style: italic;
+}
+blockquote {
+  margin: 1em 0;
+  border-left: 2px var(--pilcrow-strong) solid;
+}
+cite {
+  display: block;
+  text-align: right;
+  font-style: italic;
+}
+
+/* tables */
+table {
+  width: auto;
+  max-width: 100%;
+  margin: 0 0 1em;
+  border-collapse: collapse;
+  &.right { margin-left: auto; }
+  &.center { margin-left: auto; margin-right: auto; }
+  &.left { margin-right: auto; }
+  & .text-left { text-align: left; }
+  & .text-center { text-align: center; }
+  & .text-right { text-align: right; }
+  & caption {
+    margin: 0;
+    padding: 3px 0 3px 1em;
+  }
+  & p { margin: 0; }
+}
+
+thead, tbody {
+  border: 1px solid var(--line-color);
+}
+th, td {
+  text-align: left;
+  vertical-align: top;
+  padding: 5px 10px;
+}
+th {
+  background-color: var(--line-color);
+}
+:is(tr:nth-child(2n), thead+tbody > tr:nth-child(2n+1)) > td {
+  background-color: var(--background-color);
+}
+:is(tr:nth-child(2n+1), thead+tbody > tr:nth-child(2n)) > td {
+  background-color: var(--highlight-color);
+}
+
+/* pilcrow */
+a.pilcrow {
+  margin-left: 3px;
+  opacity: 0.2;
+  user-select: none;
+  &[href] {
+    color: var(--pilcrow-weak);
+    &:hover { text-decoration: none; }
+  }
+  @media not print {
+    :hover > &, &:focus {
+      opacity: 1;
+    }
+    &[href]:hover {
+      color: var(--pilcrow-strong);
+      background-color: transparent;
+    }
+  }
+  @media print {
+    display: none;
+  }
+}
+
+/* misc */
+hr {
+  border: 0;
+  border-top: 1px solid var(--line-color);
+}
+.bcp14 {
+  font-variant: small-caps;
+  font-weight: 600;
+  font-size: var(--small-font-size);
+}
+.role {
+  font-variant: all-small-caps;
+}
+sub, sup {
+  line-height: 1;
+  font-size: 80%;
+}
+
+/* info block */
+#identifiers {
+  margin: 0;
+  font-size: var(--small-font-size);
+  line-height: 18px;
+  --identifier-width: 15ch;
+  & dt {
+    width: var(--identifier-width);
+    min-width: var(--identifier-width);
+    clear: left;
+    float: left;
+    text-align: right;
+    margin-right: 1ch;
+  }
+  & dd {
+    margin: 0;
+    margin-left: calc(1em + var(--identifier-width)) !important;
+    min-width: 5em;
+  }
+  & .authors {
+    & .author {
+      display: inline-block;
+      margin-right: 1.5em;
+    }
+    & .org {
+      font-style: italic;
+    }
+  }
+}
+
+/* The prepared/rendered info at the very bottom of the page */
+.docInfo {
+  color: #999;
+  font-size: 0.9em;
+  font-style: italic;
+  margin-top: 2em;
+  & .prepared {
+    float: right;
+  }
+}
+
+/* table of contents */
+#toc {
+  padding: 0.75em 0 2em 0;
+  margin-bottom: 1em;
+
+  & nav {
+    & ul {
+      margin: 0 0.5em 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    & li {
+      line-height: 1.3em;
+      margin: 2px 0;
+      padding-left: 1.2em;
+      text-indent: -1.2em;
+    }
+  }
+  & a.xref {
+    white-space: normal;
+  }
+}
+
+.references {
+  & > dt {
+    text-align: right;
+    font-weight: bold;
+    min-width: 10ch;
+    margin-right: 1.5ch;
+    &:target::before {
+      content: "⇒";
+      margin: 0 10px 0 -25px;
+    }
+  }
+  & > dd {
+    margin-left: 12ch !important;
+    overflow: visible;
+    & .refInstance {
+      margin-bottom: 0.8em;
+    }
+    & .ascii {
+      margin-bottom: 0.25em;
+    }
+  }
+}
+
+#rfc\.index\.index + ul {
+  margin-left: 0;
+}
+
+/* authors */
+address.vcard {
+  font-style: normal;
+  max-width: 20em;
+  margin: 1em auto 1em 0;
+
+  & .nameRole {
+    font-weight: 700;
+    margin-left: 0;
+  }
+  & .label {
+    margin: 0.5em 0;
+  }
+  & .type {
+    display: none;
+  }
+  & .alternative-contact {
+    margin: 0.5em 0 0.25em 0;
+  }
+  & .non-ascii {
+    margin: 0 0 0 2em;
+  }
+  & div.left {
+    text-align: left;
+  }
+  & div.right {
+    text-align: right;
+  }
+}
+
+hr.addr {
+  border-top: 1px dashed;
+  margin: 0;
+  color: #ddd;
+  max-width: calc(100% - 16px);
+}
+@media (min-width: 500px) {
+  #authors-addresses {
+    & > section {
+      column-count: 2;
+      column-gap: 20px;
+    }
+    & > section > h2 {
+      column-span: all;
+    }
+    /* hack for break-inside: avoid-column */
+    & address {
+      display: inline-block;
+      break-inside: avoid-column;
+    }
+  }
+}
+
+/* Comments */
+.rfcEditorRemove {
+  & p:first-of-type {
+    font-style: italic;
+  }
+}
+.cref {
+  background-color: rgba(249, 232, 105, 0.3);
+  padding: 2px 4px;
+}
+.crefSource {
+  font-style: italic;
+}
+
+@media screen {
+  #toc {
+    & nav {
+      font-family: var(--font-title);
+      font-weight: 360;
+      & > ul { margin-bottom: 2em; }
+      & ul {
+        margin: 0 0 0 4px;
+        & :is(p, li) {
+          margin: 2px 0;
+        }
+      }
+    }
+    & a.toplink {
+      float: right;
+    }
+  }
+}
+@media not screen {
+  #toc a.toplink {
+    display: none;
+  }
+}
+
+
+/* TOC layout for smaller screens */
+@media screen and (max-width: 929px) {
+  #toc {
+    position: fixed;
+    z-index: 2;
+    top: 0;
+    right: 0;
+    padding: 1px 0 0 0;
+    margin: 0;
+    border-bottom: 1px solid #ccc;
+    opacity: 0.6;
+    & h2 {
+      margin: 0;
+      padding: 2px 0 2px 6px;
+      padding-right: 1em;
+      font-size: 18px;
+      line-height: 24px;
+      min-width: 190px;
+      text-align: right;
+      background-color: #444;
+      color: white;
+      cursor: pointer;
+      &::before { /* css hamburger */
+        float: right;
+        position: relative;
+        width: 1em;
+        height: 1px;
+        left: -164px;
+        margin: 8px 0 0 0;
+        background: white none repeat scroll 0 0;
+        box-shadow: 0 4px 0 0 white, 0 8px 0 0 white;
+        content: "";
+      }
+    }
+    & nav {
+      display: none;
+      background-color: var(--background-color);
+      padding: 0.5em 1em 1em;
+      overflow: auto;
+      overscroll-behavior: contain;
+      height: calc(100vh - 48px);
+      border-left: 1px solid #ddd;
+    }
+    &.active {
+      opacity: 1;
+      & nav { display: block; }
+    }
+    /* Make the collapsed ToC header render white on gray also when it's a link */
+    & h2 a,
+    & h2 a:is(:link, :focus, :hover),
+    & a.toplink,
+    & a.toplink:hover {
+      color: white;
+      background-color: #444;
+      text-decoration: none;
+    }
+    & a.toplink {
+      margin: 2px 0.5em 0;
+    }
+  }
+}
+
+/* TOC layout for wide screens */
+@media screen and (min-width: 930px) {
+  body {
+    padding-right: 360px;
+    padding-right: calc(min(180px + 20%, 500px));
+  }
+  #toc {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    right: calc(50vw - 480px);
+    width: 312px;
+    margin: 0;
+    padding: 0;
+    z-index: 1;
+    & h2 {
+      margin: 0;
+      padding: 0.25em 1em 1em 0;
+    }
+    & nav {
+      display: block;
+      height: calc(90vh - 84px);
+      bottom: 0;
+      padding: 0.5em 0 2em;
+      overflow: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+    }
+    & a.toplink {
+      margin: 8px 0.5em 0;
+    }
+  }
+  img { /* future proofing */
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+/* pagination */
+@media print {
+  body {
+    width: 100%;
+  }
+  p {
+    orphans: 3;
+    widows: 3;
+  }
+  #n-copyright-notice {
+    border-bottom: none;
+  }
+  #toc {
+    page-break-before: always;
+    border-top: none;
+    padding-top: 0;
+  }
+  #n-introduction {
+    page-break-before: always;
+  }
+  figure, pre, .vcard {
+    page-break-inside: avoid;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+  }
+  :is(h2, h3, h4, h5, h6)+*, dd {
+    page-break-before: avoid;
+  }
+  pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 10pt;
+  }
+  table {
+    border: 1px solid #ddd;
+  }
+  td {
+    border-top: 1px solid #ddd;
+  }
+}
+
+@page :first {
+  padding-top: 0;
+  @top-left {
+    content: normal;
+    border: none;
+  }
+  @top-center {
+    content: normal;
+    border: none;
+  }
+  @top-right {
+    content: normal;
+    border: none;
+  }
+}
+
+@page {
+  size: A4;
+  margin-bottom: 45mm;
+  padding-top: 20px;
+}
+
+/* Dark mode. */
+@media (prefers-color-scheme: dark) {
+:root {
+  --background-color: #121212;
+  --text-color: #f0f0f0;
+  --title-color: #fff;
+  --link-color: #4da4f0;
+  --highlight-color: #282828;
+  --line-color: #444;
+  --pilcrow-weak: #444;
+  --pilcrow-strong: #666;
+  scrollbar-color: #777 #333;
+}
+}
+
+/* SVG Trick: a prefix match works because only black and white are allowed */
+svg {
+  & :is([stroke="black"], [stroke^="#000"]) {
+    stroke: var(--text-color);
+  }
+  & :is([stroke="white"], [stroke^="#fff"]) {
+    stroke: var(--background-color);
+  }
+  & :is([fill="black"], [fill^="#000"], :not([fill])) {
+    fill: var(--text-color);
+  }
+  & :is([fill="white"], [fill^="#fff"]) {
+    fill: var(--background-color);
+  }
+}
+</style>
+
+</head>
+<body class="xml2rfc">
+<table class="ears">
+<thead><tr>
+<td class="left">Internet-Draft</td>
+<td class="center">SLS</td>
+<td class="right">July 2026</td>
+</tr></thead>
+<tfoot><tr>
+<td class="left">Kohbrok &amp; Robert</td>
+<td class="center">Expires 29 January 2027</td>
+<td class="right">[Page]</td>
+</tr></tfoot>
+</table>
+<div id="external-metadata" class="document-information"></div>
+<div id="internal-metadata" class="document-information">
+<dl id="identifiers">
+<dt class="label-workgroup">Workgroup:</dt>
+<dd class="workgroup">Messaging Layer Security</dd>
+<dt class="label-internet-draft">Internet-Draft:</dt>
+<dd class="internet-draft">draft-kohbrok-mls-storage-layer-security-latest</dd>
+<dt class="label-published">Published:</dt>
+<dd class="published">
+<time datetime="2026-07-28" class="published">28 July 2026</time>
+    </dd>
+<dt class="label-intended-status">Intended Status:</dt>
+<dd class="intended-status">Informational</dd>
+<dt class="label-expires">Expires:</dt>
+<dd class="expires"><time datetime="2027-01-29">29 January 2027</time></dd>
+<dt class="label-authors">Authors:</dt>
+<dd class="authors">
+<div class="author">
+      <div class="author-name">K. Kohbrok</div>
+<div class="org">Phoenix R&amp;D</div>
+</div>
+<div class="author">
+      <div class="author-name">R. Robert</div>
+<div class="org">Phoenix R&amp;D</div>
+</div>
+</dd>
+</dl>
+</div>
+<h1 id="title">Storage Layer Security</h1>
+<section id="section-abstract">
+      <h2 id="abstract"><a href="#abstract" class="selfRef">Abstract</a></h2>
+<p id="section-abstract-1">This document defines Storage Layer Security (SLS), a component for the
+Messaging Layer Security (MLS) protocol that lets the members of an MLS group
+encrypt data at rest such that access to the data is tied to group membership.
+Members derive a shared storage secret from the MLS key schedule, derive
+per-record wrapping keys from it, and authenticate the resulting set of
+storage records through a hash tree whose root is agreed upon in the MLS
+group context. When the group membership changes, the storage layer is
+re-keyed so that new members gain access and removed members lose access to
+records created after their removal.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
+</section>
+<section class="note rfcEditorRemove" id="section-note.1">
+      <h2 id="name-about-this-document">
+<a href="#name-about-this-document" class="section-name selfRef">About This Document</a>
+      </h2>
+<p id="section-note.1-1">This note is to be removed before publishing as an RFC.<a href="#section-note.1-1" class="pilcrow">¶</a></p>
+<p id="section-note.1-2">
+        The latest revision of this draft can be found at <span><a href="https://kkohbrok.github.io/draft-kohbrok-storage-layer-security/draft-kohbrok-mls-storage-layer-security.html">https://kkohbrok.github.io/draft-kohbrok-storage-layer-security/draft-kohbrok-mls-storage-layer-security.html</a></span>.
+        Status information for this document may be found at <span><a href="https://datatracker.ietf.org/doc/draft-kohbrok-mls-storage-layer-security/">https://datatracker.ietf.org/doc/draft-kohbrok-mls-storage-layer-security/</a></span>.<a href="#section-note.1-2" class="pilcrow">¶</a></p>
+<p id="section-note.1-3">
+        Discussion of this document takes place on the
+        Messaging Layer Security Working Group mailing list (<span><a href="mailto:mls@ietf.org">mailto:mls@ietf.org</a></span>),
+        which is archived at <span><a href="https://mailarchive.ietf.org/arch/browse/mls/">https://mailarchive.ietf.org/arch/browse/mls/</a></span>.
+        Subscribe at <span><a href="https://www.ietf.org/mailman/listinfo/mls/">https://www.ietf.org/mailman/listinfo/mls/</a></span>.<a href="#section-note.1-3" class="pilcrow">¶</a></p>
+<p id="section-note.1-4">Source for this draft and an issue tracker can be found at
+        <span><a href="https://github.com/kkohbrok/draft-kohbrok-storage-layer-security">https://github.com/kkohbrok/draft-kohbrok-storage-layer-security</a></span>.<a href="#section-note.1-4" class="pilcrow">¶</a></p>
+</section>
+<div id="status-of-memo">
+<section id="section-boilerplate.1">
+        <h2 id="name-status-of-this-memo">
+<a href="#name-status-of-this-memo" class="section-name selfRef">Status of This Memo</a>
+        </h2>
+<p id="section-boilerplate.1-1">
+        This Internet-Draft is submitted in full conformance with the
+        provisions of BCP 78 and BCP 79.<a href="#section-boilerplate.1-1" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-2">
+        Internet-Drafts are working documents of the Internet Engineering Task
+        Force (IETF). Note that other groups may also distribute working
+        documents as Internet-Drafts. The list of current Internet-Drafts is
+        at <span><a href="https://datatracker.ietf.org/drafts/current/">https://datatracker.ietf.org/drafts/current/</a></span>.<a href="#section-boilerplate.1-2" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-3">
+        Internet-Drafts are draft documents valid for a maximum of six months
+        and may be updated, replaced, or obsoleted by other documents at any
+        time. It is inappropriate to use Internet-Drafts as reference
+        material or to cite them other than as "work in progress."<a href="#section-boilerplate.1-3" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-4">
+        This Internet-Draft will expire on 29 January 2027.<a href="#section-boilerplate.1-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="copyright">
+<section id="section-boilerplate.2">
+        <h2 id="name-copyright-notice">
+<a href="#name-copyright-notice" class="section-name selfRef">Copyright Notice</a>
+        </h2>
+<p id="section-boilerplate.2-1">
+            Copyright (c) 2026 IETF Trust and the persons identified as the
+            document authors. All rights reserved.<a href="#section-boilerplate.2-1" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.2-2">
+            This document is subject to BCP 78 and the IETF Trust's Legal
+            Provisions Relating to IETF Documents
+            (<span><a href="https://trustee.ietf.org/license-info">https://trustee.ietf.org/license-info</a></span>) in effect on the date of
+            publication of this document. Please review these documents
+            carefully, as they describe your rights and restrictions with
+            respect to this document. Code Components extracted from this
+            document must include Revised BSD License text as described in
+            Section 4.e of the Trust Legal Provisions and are provided without
+            warranty as described in the Revised BSD License.<a href="#section-boilerplate.2-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="toc">
+<section id="section-toc.1">
+        <a href="#" onclick="scroll(0,0)" class="toplink">▲</a><h2 id="name-table-of-contents">
+<a href="#name-table-of-contents" class="section-name selfRef">Table of Contents</a>
+        </h2>
+<nav class="toc"><ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1">
+            <p id="section-toc.1-1.1.1" class="keepWithNext"><a href="#section-1" class="auto internal xref">1</a>.  <a href="#name-introduction" class="internal xref">Introduction</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.2">
+            <p id="section-toc.1-1.2.1" class="keepWithNext"><a href="#section-2" class="auto internal xref">2</a>.  <a href="#name-conventions-and-definitions" class="internal xref">Conventions and Definitions</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.3">
+            <p id="section-toc.1-1.3.1" class="keepWithNext"><a href="#section-3" class="auto internal xref">3</a>.  <a href="#name-protocol-overview" class="internal xref">Protocol Overview</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4">
+            <p id="section-toc.1-1.4.1"><a href="#section-4" class="auto internal xref">4</a>.  <a href="#name-the-sls-component" class="internal xref">The SLS Component</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.1">
+                <p id="section-toc.1-1.4.2.1.1"><a href="#section-4.1" class="auto internal xref">4.1</a>.  <a href="#name-component-state" class="internal xref">Component State</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.2">
+                <p id="section-toc.1-1.4.2.2.1"><a href="#section-4.2" class="auto internal xref">4.2</a>.  <a href="#name-key-schedule" class="internal xref">Key Schedule</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.3">
+                <p id="section-toc.1-1.4.2.3.1"><a href="#section-4.3" class="auto internal xref">4.3</a>.  <a href="#name-storage-records" class="internal xref">Storage Records</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.3.2.1">
+                    <p id="section-toc.1-1.4.2.3.2.1.1"><a href="#section-4.3.1" class="auto internal xref">4.3.1</a>.  <a href="#name-stored-item-encryption" class="internal xref">Stored Item Encryption</a></p>
+</li>
+                  <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.3.2.2">
+                    <p id="section-toc.1-1.4.2.3.2.2.1"><a href="#section-4.3.2" class="auto internal xref">4.3.2</a>.  <a href="#name-record-encryption" class="internal xref">Record Encryption</a></p>
+</li>
+                </ul>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.4">
+                <p id="section-toc.1-1.4.2.4.1"><a href="#section-4.4" class="auto internal xref">4.4</a>.  <a href="#name-record-tree" class="internal xref">Record Tree</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.5">
+                <p id="section-toc.1-1.4.2.5.1"><a href="#section-4.5" class="auto internal xref">4.5</a>.  <a href="#name-operations" class="internal xref">Operations</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.5.2.1">
+                    <p id="section-toc.1-1.4.2.5.2.1.1"><a href="#section-4.5.1" class="auto internal xref">4.5.1</a>.  <a href="#name-semantics" class="internal xref">Semantics</a></p>
+</li>
+                  <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.5.2.2">
+                    <p id="section-toc.1-1.4.2.5.2.2.1"><a href="#section-4.5.2" class="auto internal xref">4.5.2</a>.  <a href="#name-validation" class="internal xref">Validation</a></p>
+</li>
+                  <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.5.2.3">
+                    <p id="section-toc.1-1.4.2.5.2.3.1"><a href="#section-4.5.3" class="auto internal xref">4.5.3</a>.  <a href="#name-processing" class="internal xref">Processing</a></p>
+</li>
+                </ul>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.6">
+                <p id="section-toc.1-1.4.2.6.1"><a href="#section-4.6" class="auto internal xref">4.6</a>.  <a href="#name-rotation" class="internal xref">Rotation</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.7">
+                <p id="section-toc.1-1.4.2.7.1"><a href="#section-4.7" class="auto internal xref">4.7</a>.  <a href="#name-joining-a-group" class="internal xref">Joining a Group</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5">
+            <p id="section-toc.1-1.5.1"><a href="#section-5" class="auto internal xref">5</a>.  <a href="#name-operational-considerations" class="internal xref">Operational Considerations</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.1">
+                <p id="section-toc.1-1.5.2.1.1"><a href="#section-5.1" class="auto internal xref">5.1</a>.  <a href="#name-the-storage-provider" class="internal xref">The Storage Provider</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.2">
+                <p id="section-toc.1-1.5.2.2.1"><a href="#section-5.2" class="auto internal xref">5.2</a>.  <a href="#name-coordinating-uploads" class="internal xref">Coordinating Uploads</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6">
+            <p id="section-toc.1-1.6.1"><a href="#section-6" class="auto internal xref">6</a>.  <a href="#name-security-considerations" class="internal xref">Security Considerations</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.1">
+                <p id="section-toc.1-1.6.2.1.1"><a href="#section-6.1" class="auto internal xref">6.1</a>.  <a href="#name-access-to-stored-data" class="internal xref">Access to Stored Data</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.2">
+                <p id="section-toc.1-1.6.2.2.1"><a href="#section-6.2" class="auto internal xref">6.2</a>.  <a href="#name-forward-secrecy" class="internal xref">Forward Secrecy</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.3">
+                <p id="section-toc.1-1.6.2.3.1"><a href="#section-6.3" class="auto internal xref">6.3</a>.  <a href="#name-deletion" class="internal xref">Deletion</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.4">
+                <p id="section-toc.1-1.6.2.4.1"><a href="#section-6.4" class="auto internal xref">6.4</a>.  <a href="#name-confidentiality-of-the-reco" class="internal xref">Confidentiality of the Record Tree</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.5">
+                <p id="section-toc.1-1.6.2.5.1"><a href="#section-6.5" class="auto internal xref">6.5</a>.  <a href="#name-nonce-and-key-reuse" class="internal xref">Nonce and Key Reuse</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.6">
+                <p id="section-toc.1-1.6.2.6.1"><a href="#section-6.6" class="auto internal xref">6.6</a>.  <a href="#name-malformed-records" class="internal xref">Malformed Records</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6.2.7">
+                <p id="section-toc.1-1.6.2.7.1"><a href="#section-6.7" class="auto internal xref">6.7</a>.  <a href="#name-metadata" class="internal xref">Metadata</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7">
+            <p id="section-toc.1-1.7.1"><a href="#section-7" class="auto internal xref">7</a>.  <a href="#name-iana-considerations" class="internal xref">IANA Considerations</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8">
+            <p id="section-toc.1-1.8.1"><a href="#section-8" class="auto internal xref">8</a>.  <a href="#name-normative-references" class="internal xref">Normative References</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9">
+            <p id="section-toc.1-1.9.1"><a href="#appendix-A" class="auto internal xref"></a><a href="#name-acknowledgments" class="internal xref">Acknowledgments</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.10">
+            <p id="section-toc.1-1.10.1"><a href="#appendix-B" class="auto internal xref"></a><a href="#name-authors-addresses" class="internal xref">Authors' Addresses</a></p>
+</li>
+        </ul>
+</nav>
+</section>
+</div>
+<div id="introduction">
+<section id="section-1">
+      <h2 id="name-introduction">
+<a href="#section-1" class="section-number selfRef">1. </a><a href="#name-introduction" class="section-name selfRef">Introduction</a>
+      </h2>
+<p id="section-1-1">MLS <span>[<a href="#RFC9420" class="cite xref">RFC9420</a>]</span> provides a group of clients with a continuously evolving
+shared secret and an authenticated view of the group's membership. Many
+applications built on MLS also need to store data at rest, for example shared
+files, group state, or message history, typically on a server that is not a
+member of the group. The natural access control policy for such data is the
+group membership itself: current members can read the data, everyone else
+cannot.<a href="#section-1-1" class="pilcrow">¶</a></p>
+<p id="section-1-2">This document defines Storage Layer Security (SLS), an MLS component in the
+sense of the safe application interface of <span>[<a href="#I-D.ietf-mls-extensions" class="cite xref">I-D.ietf-mls-extensions</a>]</span>. SLS
+provides:<a href="#section-1-2" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-1-3.1">
+          <p id="section-1-3.1.1">A two-layer encryption scheme in which each stored item is encrypted under
+key material derived from a fresh, item-specific secret, and the
+item-specific secrets are wrapped under per-record keys derived from the
+MLS key schedule.<a href="#section-1-3.1.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-1-3.2">
+          <p id="section-1-3.2.1">An authenticated data structure, the record tree, that commits the group to
+the exact set of storage records. Its root hash is part of the MLS group
+context, so agreement on it follows from MLS itself.<a href="#section-1-3.2.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-1-3.3">
+          <p id="section-1-3.3.1">Rotation of the storage secret, triggered implicitly by changes to the
+group membership and explicitly on request of a member, together with
+deterministic re-encryption of all storage records under new key material.<a href="#section-1-3.3.1" class="pilcrow">¶</a></p>
+</li>
+      </ul>
+<p id="section-1-4">SLS deliberately does not define how stored items are uploaded to, downloaded
+from, or deleted at a storage provider. Those interactions are
+application-specific. SLS defines the cryptographic state the group agrees
+on and the rules for evolving it.<a href="#section-1-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="conventions-and-definitions">
+<section id="section-2">
+      <h2 id="name-conventions-and-definitions">
+<a href="#section-2" class="section-number selfRef">2. </a><a href="#name-conventions-and-definitions" class="section-name selfRef">Conventions and Definitions</a>
+      </h2>
+<p id="section-2-1">The key words "<span class="bcp14">MUST</span>", "<span class="bcp14">MUST NOT</span>", "<span class="bcp14">REQUIRED</span>", "<span class="bcp14">SHALL</span>", "<span class="bcp14">SHALL NOT</span>", "<span class="bcp14">SHOULD</span>", "<span class="bcp14">SHOULD NOT</span>", "<span class="bcp14">RECOMMENDED</span>", "<span class="bcp14">NOT RECOMMENDED</span>",
+"<span class="bcp14">MAY</span>", and "<span class="bcp14">OPTIONAL</span>" in this document are to be interpreted as
+described in BCP 14 <span>[<a href="#RFC2119" class="cite xref">RFC2119</a>]</span> <span>[<a href="#RFC8174" class="cite xref">RFC8174</a>]</span> when, and only when, they
+appear in all capitals, as shown here.<a href="#section-2-1" class="pilcrow">¶</a></p>
+<p id="section-2-2">This document uses the TLS presentation language defined in Section 3 of
+<span>[<a href="#RFC8446" class="cite xref">RFC8446</a>]</span> as used in <span>[<a href="#RFC9420" class="cite xref">RFC9420</a>]</span>, as well as the following terms:<a href="#section-2-2" class="pilcrow">¶</a></p>
+<span class="break"></span><dl class="dlParallel" id="section-2-3">
+        <dt id="section-2-3.1">Stored item:</dt>
+        <dd style="margin-left: 1.5em" id="section-2-3.2">
+          <p id="section-2-3.2.1">An opaque piece of application data encrypted and stored at rest, for
+example at a storage provider. Stored items are sometimes called blobs.<a href="#section-2-3.2.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+<dt id="section-2-3.3">Storage record:</dt>
+        <dd style="margin-left: 1.5em" id="section-2-3.4">
+          <p id="section-2-3.4.1">A small structure describing one stored item, containing among other
+things the secret the item's encryption key is derived from and a digest
+of the item's ciphertext.<a href="#section-2-3.4.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+<dt id="section-2-3.5">Record tree:</dt>
+        <dd style="margin-left: 1.5em" id="section-2-3.6">
+          <p id="section-2-3.6.1">A left-balanced binary hash tree whose leaves are computed over storage
+records. Its root hash is part of the SLS component state in the group
+context.<a href="#section-2-3.6.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+<dt id="section-2-3.7">Storage epoch:</dt>
+        <dd style="margin-left: 1.5em" id="section-2-3.8">
+          <p id="section-2-3.8.1">The MLS epoch in which the current storage secret was derived. All storage
+records are wrapped under key material of the current storage epoch.<a href="#section-2-3.8.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+<dt id="section-2-3.9">Rotation:</dt>
+        <dd style="margin-left: 1.5em" id="section-2-3.10">
+          <p id="section-2-3.10.1">The transition to a new storage epoch, including the re-encryption of all
+storage records under the new storage secret's key material.<a href="#section-2-3.10.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+<dt id="section-2-3.11">Storage provider:</dt>
+        <dd style="margin-left: 1.5em" id="section-2-3.12">
+          <p id="section-2-3.12.1">An entity, typically a server and typically not a group member, that
+stores encrypted storage records and stored items on behalf of the group.<a href="#section-2-3.12.1" class="pilcrow">¶</a></p>
+</dd>
+      <dd class="break"></dd>
+</dl>
+</section>
+</div>
+<div id="protocol-overview">
+<section id="section-3">
+      <h2 id="name-protocol-overview">
+<a href="#section-3" class="section-number selfRef">3. </a><a href="#name-protocol-overview" class="section-name selfRef">Protocol Overview</a>
+      </h2>
+<p id="section-3-1">This section is informative.<a href="#section-3-1" class="pilcrow">¶</a></p>
+<p id="section-3-2">SLS separates the encryption of bulk data from the encryption of key
+material. A client that wants to add a stored item proceeds as follows:<a href="#section-3-2" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-3-3">
+<li id="section-3-3.1">
+          <p id="section-3-3.1.1">It samples a fresh secret, encrypts the item under key material derived
+from that secret, and computes a digest over the resulting ciphertext.<a href="#section-3-3.1.1" class="pilcrow">¶</a></p>
+</li>
+        <li id="section-3-3.2">
+          <p id="section-3-3.2.1">It assembles a storage record containing the secret, the AEAD algorithm,
+the digest, the digest algorithm, and application-defined metadata such
+as the item's location.<a href="#section-3-3.2.1" class="pilcrow">¶</a></p>
+</li>
+        <li id="section-3-3.3">
+          <p id="section-3-3.3.1">It encrypts the storage record under a key derived from the current
+storage secret and sends the resulting ciphertext to the group in an
+AppDataUpdate proposal, covered by a commit.<a href="#section-3-3.3.1" class="pilcrow">¶</a></p>
+</li>
+      </ol>
+<p id="section-3-4">When the commit is processed, each member inserts the new record into the
+lowest free leaf of the record tree and updates the root hash in the
+component state. Since the component state is part of the group context, all
+members agree on the record set, and a member whose local copy diverges can
+detect this immediately.<a href="#section-3-4" class="pilcrow">¶</a></p>
+<p id="section-3-5">The storage secret is derived from the MLS key schedule via the component
+exporter of <span>[<a href="#I-D.ietf-mls-extensions" class="cite xref">I-D.ietf-mls-extensions</a>]</span>, in the epoch identified by the
+<code>storage_epoch</code> field of the component state. Each record is wrapped under
+key material derived from that secret, and members retain only the key
+material of the current storage epoch.<a href="#section-3-5" class="pilcrow">¶</a></p>
+<p id="section-3-6">Any commit that adds or removes members triggers a rotation: the
+<code>storage_epoch</code> advances to the new epoch and every record is re-encrypted
+under key material derived from the new storage secret. The re-encryption
+is deterministic, since keys and nonces are derived from the new storage
+secret, so every member computes identical ciphertexts locally and no
+re-encrypted data needs to be transmitted within the group. A newly added
+member derives the new storage secret directly and can decrypt all
+records. A removed member cannot derive it. Members can also trigger a rotation
+explicitly, without a membership change, via a dedicated operation.<a href="#section-3-6" class="pilcrow">¶</a></p>
+<p id="section-3-7">The leaves of the record tree are computed over plaintext storage records
+rather than their ciphertexts. This avoids a circular dependency: the root
+hash is part of the group context, the group context is an input to the MLS
+key schedule, and the key schedule produces the storage secret that the
+ciphertexts depend on. Hashing plaintext records also means that rotations
+do not modify the record tree. Because every storage record contains a
+fresh, high-entropy key, the leaf hashes do not leak information about the
+records to non-members.<a href="#section-3-7" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="the-sls-component">
+<section id="section-4">
+      <h2 id="name-the-sls-component">
+<a href="#section-4" class="section-number selfRef">4. </a><a href="#name-the-sls-component" class="section-name selfRef">The SLS Component</a>
+      </h2>
+<p id="section-4-1">SLS is an MLS component as defined in <span>[<a href="#I-D.ietf-mls-extensions" class="cite xref">I-D.ietf-mls-extensions</a>]</span>, with
+component ID TBD1 (see <a href="#iana" class="auto internal xref">Section 7</a>). Groups using SLS store the component state
+defined in <a href="#component-state" class="auto internal xref">Section 4.1</a> in the <code>app_data_dictionary</code> group context
+extension and modify it exclusively through AppDataUpdate proposals carrying
+the operations defined in <a href="#operations" class="auto internal xref">Section 4.5</a>.<a href="#section-4-1" class="pilcrow">¶</a></p>
+<p id="section-4-2">All cryptographic operations of the SLS component other than the encryption
+of stored items (<a href="#stored-item-encryption" class="auto internal xref">Section 4.3.1</a>) use the hash, KDF, and AEAD of
+the group's MLS ciphersuite.<a href="#section-4-2" class="pilcrow">¶</a></p>
+<div id="component-state">
+<section id="section-4.1">
+        <h3 id="name-component-state">
+<a href="#section-4.1" class="section-number selfRef">4.1. </a><a href="#name-component-state" class="section-name selfRef">Component State</a>
+        </h3>
+<p id="section-4.1-1">The SLS component state is the following structure:<a href="#section-4.1-1" class="pilcrow">¶</a></p>
+<div class="lang-tls-presentation sourcecode" id="section-4.1-2">
+<pre>
+struct {
+    uint64 storage_epoch;
+    uint32 n_leaves;
+    opaque root_hash&lt;V&gt;;
+} StorageState;
+</pre><a href="#section-4.1-2" class="pilcrow">¶</a>
+</div>
+<span class="break"></span><dl class="dlParallel" id="section-4.1-3">
+          <dt id="section-4.1-3.1">storage_epoch:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.1-3.2">
+            <p id="section-4.1-3.2.1">The MLS epoch in which the current storage secret was derived (see
+<a href="#key-schedule" class="auto internal xref">Section 4.2</a>).<a href="#section-4.1-3.2.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.1-3.3">n_leaves:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.1-3.4">
+            <p id="section-4.1-3.4.1">The number of leaves of the record tree.<a href="#section-4.1-3.4.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.1-3.5">root_hash:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.1-3.6">
+            <p id="section-4.1-3.6.1">The root hash of the record tree (see <a href="#record-tree" class="auto internal xref">Section 4.4</a>), or a zero-length
+string if <code>n_leaves</code> is zero.<a href="#section-4.1-3.6.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+</dl>
+<p id="section-4.1-4">The component state is created by the first AppDataUpdate proposal for the SLS
+component: if no state exists when SLS operations are processed, processing
+starts from an initial state with <code>storage_epoch</code> set to the epoch the covering
+commit was created in, <code>n_leaves</code> set to zero, and an empty <code>root_hash</code>, and the
+operations are applied to that state. Only <code>add</code> and <code>rotate</code> operations are
+valid if there is no component or if <code>n_leaves</code> is zero.<a href="#section-4.1-4" class="pilcrow">¶</a></p>
+<p id="section-4.1-5">Processing SLS operations requires SLS application logic: the updated
+component state is computed by that logic rather than carried in
+proposals, so every member of a group that uses SLS has to support the
+component. Negotiation and enforcement of component support, including
+the advertisement of supported components in LeafNodes and the listing
+of the SLS component ID as required in the group's <code>app_components</code>
+component, are handled by the mechanisms of <span>[<a href="#I-D.ietf-mls-extensions" class="cite xref">I-D.ietf-mls-extensions</a>]</span>.<a href="#section-4.1-5" class="pilcrow">¶</a></p>
+<ul class="normal ulEmpty">
+<li class="normal ulEmpty" id="section-4.1-6.1">
+            <p id="section-4.1-6.1.1">NOTE: This document assumes component support negotiation and
+enforcement rules in <span>[<a href="#I-D.ietf-mls-extensions" class="cite xref">I-D.ietf-mls-extensions</a>]</span> that, at the time of
+writing, are still under discussion.<a href="#section-4.1-6.1.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+</section>
+</div>
+<div id="key-schedule">
+<section id="section-4.2">
+        <h3 id="name-key-schedule">
+<a href="#section-4.2" class="section-number selfRef">4.2. </a><a href="#name-key-schedule" class="section-name selfRef">Key Schedule</a>
+        </h3>
+<p id="section-4.2-1">The storage secret for a storage epoch is exported from the MLS key schedule
+of that epoch using the component exporter defined in
+<span>[<a href="#I-D.ietf-mls-extensions" class="cite xref">I-D.ietf-mls-extensions</a>]</span>:<a href="#section-4.2-1" class="pilcrow">¶</a></p>
+<div class="lang-pseudocode sourcecode" id="section-4.2-2">
+<pre>
+storage_secret = SafeExportSecret(sls_component_id)
+</pre><a href="#section-4.2-2" class="pilcrow">¶</a>
+</div>
+<p id="section-4.2-3">All further secrets are derived using the following function, which is
+identical to <code>ExpandWithLabel</code> from <span><a href="https://rfc-editor.org/rfc/rfc9420#section-8" class="relref">Section 8</a> of [<a href="#RFC9420" class="cite xref">RFC9420</a>]</span> except for the
+label prefix:<a href="#section-4.2-3" class="pilcrow">¶</a></p>
+<div class="lang-pseudocode sourcecode" id="section-4.2-4">
+<pre>
+ExpandWithLabel(Secret, Label, Context, Length) =
+    KDF.Expand(Secret, KDFLabel, Length)
+</pre><a href="#section-4.2-4" class="pilcrow">¶</a>
+</div>
+<p id="section-4.2-5">Where KDFLabel is specified as:<a href="#section-4.2-5" class="pilcrow">¶</a></p>
+<div class="lang-tls-presentation sourcecode" id="section-4.2-6">
+<pre>
+struct {
+    uint16 length;
+    opaque label&lt;V&gt;;
+    opaque context&lt;V&gt;;
+} KDFLabel;
+</pre><a href="#section-4.2-6" class="pilcrow">¶</a>
+</div>
+<p id="section-4.2-7">And its fields are set to:<a href="#section-4.2-7" class="pilcrow">¶</a></p>
+<div class="lang-pseudocode sourcecode" id="section-4.2-8">
+<pre>
+length = Length;
+label = "SLS 1.0 " + Label;
+context = Context;
+</pre><a href="#section-4.2-8" class="pilcrow">¶</a>
+</div>
+<p id="section-4.2-9">Each storage record encryption uses a wrap secret derived from the storage
+secret and the WrapContext defined in <a href="#record-encryption" class="auto internal xref">Section 4.3.2</a>:<a href="#section-4.2-9" class="pilcrow">¶</a></p>
+<div class="lang-pseudocode sourcecode" id="section-4.2-10">
+<pre>
+wrap_secret = ExpandWithLabel(storage_secret, "wrap", WrapContext,
+                              KDF.Nh)
+wrap_key    = ExpandWithLabel(wrap_secret, "key", "", AEAD.Nk)
+wrap_nonce  = ExpandWithLabel(wrap_secret, "nonce", "", AEAD.Nn)
+</pre><a href="#section-4.2-10" class="pilcrow">¶</a>
+</div>
+<p id="section-4.2-11">The <code>Context</code> argument in the derivation of <code>wrap_secret</code> is the TLS
+serialization of the WrapContext.<a href="#section-4.2-11" class="pilcrow">¶</a></p>
+<p id="section-4.2-12">Each WrapContext identifies one logical record encryption, so each
+<code>wrap_secret</code> and its derived key and nonce pair are used for only one
+record. Proposal contexts contain a random identifier, while rotation
+contexts are deterministic.<a href="#section-4.2-12" class="pilcrow">¶</a></p>
+<p id="section-4.2-13">All key material derived from a previous storage epoch's storage secret
+<span class="bcp14">MUST</span> be deleted once the rotation to a new storage epoch is complete.<a href="#section-4.2-13" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="storage-records">
+<section id="section-4.3">
+        <h3 id="name-storage-records">
+<a href="#section-4.3" class="section-number selfRef">4.3. </a><a href="#name-storage-records" class="section-name selfRef">Storage Records</a>
+        </h3>
+<p id="section-4.3-1">A storage record describes a single stored item:<a href="#section-4.3-1" class="pilcrow">¶</a></p>
+<div class="lang-tls-presentation sourcecode" id="section-4.3-2">
+<pre>
+struct {
+    opaque record_secret&lt;V&gt;;
+    uint16 record_aead;
+    uint8  digest_algorithm;
+    opaque record_digest&lt;V&gt;;
+    opaque location&lt;V&gt;;
+    opaque application_data&lt;V&gt;;
+} StorageRecord;
+</pre><a href="#section-4.3-2" class="pilcrow">¶</a>
+</div>
+<span class="break"></span><dl class="dlParallel" id="section-4.3-3">
+          <dt id="section-4.3-3.1">record_secret:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.3-3.2">
+            <p id="section-4.3-3.2.1">The secret from which the stored item's encryption key and nonce are
+derived.<a href="#section-4.3-3.2.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.3-3.3">record_aead:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.3-3.4">
+            <p id="section-4.3-3.4.1">The AEAD algorithm the stored item is encrypted with, from the HPKE AEAD
+Identifiers registry <span>[<a href="#RFC9180" class="cite xref">RFC9180</a>]</span>.<a href="#section-4.3-3.4.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.3-3.5">digest_algorithm:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.3-3.6">
+            <p id="section-4.3-3.6.1">The hash algorithm used for <code>record_digest</code>, from the Named Information
+Hash Algorithm registry <span>[<a href="#RFC6920" class="cite xref">RFC6920</a>]</span>.<a href="#section-4.3-3.6.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.3-3.7">record_digest:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.3-3.8">
+            <p id="section-4.3-3.8.1">A digest, computed with <code>digest_algorithm</code>, over the ciphertext of the
+stored item.<a href="#section-4.3-3.8.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.3-3.9">location:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.3-3.10">
+            <p id="section-4.3-3.10.1">An application-defined locator for the stored item, for example an
+identifier at a storage provider. It <span class="bcp14">MAY</span> be empty, for example when
+stored items are content-addressed by <code>record_digest</code>.<a href="#section-4.3-3.10.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.3-3.11">application_data:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.3-3.12">
+            <p id="section-4.3-3.12.1">Opaque application-defined metadata about the stored item.<a href="#section-4.3-3.12.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+</dl>
+<p id="section-4.3-4">The permitted values for <code>record_aead</code> are AES-128-GCM, AES-256-GCM, and
+ChaCha20Poly1305. The permitted values for <code>digest_algorithm</code> are
+sha-256, sha-384, and sha-512. Implementations <span class="bcp14">MUST</span> support all permitted
+algorithms, so that every valid record is usable by every member. Records
+with any other algorithm value, a <code>record_secret</code> whose length does not
+match <code>KDF.Nh</code>, or a <code>record_digest</code> whose length
+does not match the output length of <code>digest_algorithm</code> are invalid and
+cause the covering commit to be rejected (<a href="#validation" class="auto internal xref">Section 4.5.2</a>). Future
+documents may extend the permitted sets.<a href="#section-4.3-4" class="pilcrow">¶</a></p>
+<p id="section-4.3-5">OPEN QUESTION: How should <code>location</code> and <code>application_data</code> be defined?
+<code>location</code> could be a URL, <code>application_data</code> could be a component-based
+container.<a href="#section-4.3-5" class="pilcrow">¶</a></p>
+<div id="stored-item-encryption">
+<section id="section-4.3.1">
+          <h4 id="name-stored-item-encryption">
+<a href="#section-4.3.1" class="section-number selfRef">4.3.1. </a><a href="#name-stored-item-encryption" class="section-name selfRef">Stored Item Encryption</a>
+          </h4>
+<p id="section-4.3.1-1">A stored item is encrypted with the AEAD algorithm identified by
+<code>record_aead</code>, under a key and nonce derived from <code>record_secret</code> using
+the group ciphersuite's KDF:<a href="#section-4.3.1-1" class="pilcrow">¶</a></p>
+<div class="lang-pseudocode sourcecode" id="section-4.3.1-2">
+<pre>
+item_key   = ExpandWithLabel(record_secret, "key", "", AEAD.Nk)
+item_nonce = ExpandWithLabel(record_secret, "nonce", "", AEAD.Nn)
+</pre><a href="#section-4.3.1-2" class="pilcrow">¶</a>
+</div>
+<p id="section-4.3.1-3">Here, <code>AEAD.Nk</code> and <code>AEAD.Nn</code> refer to the algorithm identified by
+<code>record_aead</code>. The AAD is empty. A client creating or updating a storage
+record <span class="bcp14">MUST</span> sample a fresh, uniformly random <code>record_secret</code> of length
+<code>KDF.Nh</code> and <span class="bcp14">MUST NOT</span> encrypt more than one plaintext under it. This
+single-use requirement carries the security of the construction: reusing
+a <code>record_secret</code> for a second plaintext repeats both the derived key and
+nonce. Deriving the pair from one secret avoids a fixed nonce value that
+could be miscopied into a context without the single-use guarantee, and
+gives the leaf hashes of the record tree a full <code>KDF.Nh</code> of entropy
+regardless of the key size of <code>record_aead</code>
+(<a href="#tree-confidentiality" class="auto internal xref">Section 6.4</a>).<a href="#section-4.3.1-3" class="pilcrow">¶</a></p>
+<p id="section-4.3.1-4"><code>record_digest</code> is computed over the resulting ciphertext. Computing the
+digest over the ciphertext allows a client to detect a corrupted or
+substituted stored item before attempting decryption.<a href="#section-4.3.1-4" class="pilcrow">¶</a></p>
+<p id="section-4.3.1-5">Handling of stored items that exceed the safe message size of the chosen
+AEAD, for example by splitting them across multiple storage records or by
+applying an application-defined chunking scheme within a single stored
+item, is out of scope for this document.<a href="#section-4.3.1-5" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="record-encryption">
+<section id="section-4.3.2">
+          <h4 id="name-record-encryption">
+<a href="#section-4.3.2" class="section-number selfRef">4.3.2. </a><a href="#name-record-encryption" class="section-name selfRef">Record Encryption</a>
+          </h4>
+<p id="section-4.3.2-1">Storage records are stored and transmitted in encrypted form. Every
+encryption derives a key and nonce from the storage secret using a
+WrapContext (<a href="#key-schedule" class="auto internal xref">Section 4.2</a>):<a href="#section-4.3.2-1" class="pilcrow">¶</a></p>
+<div class="lang-tls-presentation sourcecode" id="section-4.3.2-2">
+<pre>
+enum {
+    reserved(0),
+    proposal(1),
+    rotation(2),
+    (255)
+} WrapType;
+
+struct {
+    WrapType wrap_type;
+    select (WrapContext.wrap_type) {
+        case proposal:
+            opaque wrap_id[32];
+        case rotation:
+            uint32 leaf_index;
+    };
+} WrapContext;
+
+struct {
+    WrapType wrap_type;
+    select (EncryptedStorageRecord.wrap_type) {
+        case proposal:
+            opaque wrap_id[32];
+        case rotation:
+            struct {};
+    };
+    opaque ciphertext&lt;V&gt;;
+} EncryptedStorageRecord;
+</pre><a href="#section-4.3.2-2" class="pilcrow">¶</a>
+</div>
+<p id="section-4.3.2-3">The <code>ciphertext</code> field contains the AEAD encryption of a serialized
+StorageRecord under <code>wrap_key</code> and <code>wrap_nonce</code>, with the serialized
+WrapContext as AAD. The WrapContext is populated as follows:<a href="#section-4.3.2-3" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-4.3.2-4.1">
+              <p id="section-4.3.2-4.1.1"><code>proposal</code>: The encrypting member <span class="bcp14">MUST</span> sample <code>wrap_id</code> as a fresh,
+uniformly random 32-byte value for every encryption. This form is used
+for records transmitted in <code>add</code> and <code>update</code> operations. The <code>wrap_id</code>
+is carried in the EncryptedStorageRecord so that a client fetching the
+record from a storage provider can derive the key and nonce without
+access to the covering proposal.<a href="#section-4.3.2-4.1.1" class="pilcrow">¶</a></p>
+</li>
+            <li class="normal" id="section-4.3.2-4.2">
+              <p id="section-4.3.2-4.2.1"><code>rotation</code>: <code>leaf_index</code> is the index of the record's leaf in the record
+tree. This form is produced by rotations. No context fields are carried:
+the storage epoch identifies the key material and the record's position
+identifies the leaf index.<a href="#section-4.3.2-4.2.1" class="pilcrow">¶</a></p>
+</li>
+          </ul>
+<p id="section-4.3.2-5">The <code>wrap_type</code> field separates proposal and rotation contexts. Proposal
+contexts are unique with overwhelming probability because their identifiers
+are sampled independently from a 256-bit space. Rotation contexts are unique
+within a storage epoch because a rotation encrypts each occupied leaf exactly
+once. See <a href="#nonce-key-reuse" class="auto internal xref">Section 6.5</a> for the resulting bounds.<a href="#section-4.3.2-5" class="pilcrow">¶</a></p>
+<p id="section-4.3.2-6">Since the wrapping key and nonce are derived from the storage secret of the
+current storage epoch, a member can decrypt any EncryptedStorageRecord of the
+current storage epoch, and only records of the current storage epoch, using
+only its current key material.<a href="#section-4.3.2-6" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="record-tree">
+<section id="section-4.4">
+        <h3 id="name-record-tree">
+<a href="#section-4.4" class="section-number selfRef">4.4. </a><a href="#name-record-tree" class="section-name selfRef">Record Tree</a>
+        </h3>
+<p id="section-4.4-1">The record tree is a left-balanced binary tree as defined in
+<span><a href="https://rfc-editor.org/rfc/rfc9420#section-4.1" class="relref">Section 4.1</a> of [<a href="#RFC9420" class="cite xref">RFC9420</a>]</span> with <code>n_leaves</code> leaves. Each leaf is either
+blank or occupied by a StorageRecord. The hash of a node is computed with
+the ciphersuite hash over the following structure:<a href="#section-4.4-1" class="pilcrow">¶</a></p>
+<div class="lang-tls-presentation sourcecode" id="section-4.4-2">
+<pre>
+enum {
+    reserved(0),
+    leaf(1),
+    parent(2),
+    (255)
+} SLSNodeType;
+
+struct {
+    SLSNodeType node_type;
+    select (SLSTreeHashInput.node_type) {
+        case leaf:
+            optional&lt;StorageRecord&gt; record;
+        case parent:
+            opaque left_hash&lt;V&gt;;
+            opaque right_hash&lt;V&gt;;
+    };
+} SLSTreeHashInput;
+</pre><a href="#section-4.4-2" class="pilcrow">¶</a>
+</div>
+<p id="section-4.4-3">For a blank leaf, the <code>record</code> field is absent. The <code>root_hash</code> in the
+component state is the hash of the root node, or the zero-length string if
+<code>n_leaves</code> is zero.<a href="#section-4.4-3" class="pilcrow">¶</a></p>
+<p id="section-4.4-4">Leaf hashes are computed over plaintext storage records, including the
+<code>record_secret</code> field, rather than over their encryptions. See
+<a href="#tree-confidentiality" class="auto internal xref">Section 6.4</a> for the confidentiality implications and
+<a href="#security-considerations" class="auto internal xref">Section 6</a> for the reasoning behind this design.<a href="#section-4.4-4" class="pilcrow">¶</a></p>
+<p id="section-4.4-5">The tree grows and shrinks at its right edge:<a href="#section-4.4-5" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-4.4-6.1">
+            <p id="section-4.4-6.1.1">When a record is added and no blank leaf exists, the tree is extended by
+one leaf on the right, incrementing <code>n_leaves</code>.<a href="#section-4.4-6.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-4.4-6.2">
+            <p id="section-4.4-6.2.1">After records have been removed, the tree is truncated: while the
+rightmost leaf is blank and <code>n_leaves</code> is greater than zero, the
+rightmost leaf is removed and <code>n_leaves</code> is decremented.<a href="#section-4.4-6.2.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+<p id="section-4.4-7">Members <span class="bcp14">SHOULD</span> store the record tree, including the plaintext records at
+its leaves. A member that stores only the component state can reconstruct
+and verify its copy of the records by fetching the encrypted records from a
+storage provider, decrypting them, and recomputing the root hash. A member
+can likewise verify an individual record against the root hash given the
+node hashes of the record's copath. The encoding of such inclusion proofs
+is specific to the interface of the storage provider and out of scope for
+this document.<a href="#section-4.4-7" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="operations">
+<section id="section-4.5">
+        <h3 id="name-operations">
+<a href="#section-4.5" class="section-number selfRef">4.5. </a><a href="#name-operations" class="section-name selfRef">Operations</a>
+        </h3>
+<p id="section-4.5-1">All modifications of the SLS component state are carried in AppDataUpdate
+proposals as defined in <span>[<a href="#I-D.ietf-mls-extensions" class="cite xref">I-D.ietf-mls-extensions</a>]</span>, with <code>component_id</code>
+set to the SLS component ID and <code>op</code> set to <code>update</code>. The <code>update</code> field
+contains a serialized StorageOperation:<a href="#section-4.5-1" class="pilcrow">¶</a></p>
+<div class="lang-tls-presentation sourcecode" id="section-4.5-2">
+<pre>
+enum {
+    reserved(0),
+    add(1),
+    update(2),
+    remove(3),
+    rotate(4),
+    (255)
+} StorageOperationType;
+
+struct {
+    StorageOperationType op_type;
+    select (StorageOperation.op_type) {
+        case add:
+            EncryptedStorageRecord record;
+        case update:
+            uint32 leaf_index;
+            EncryptedStorageRecord record;
+        case remove:
+            uint32 leaf_index;
+        case rotate:
+            struct {};
+    };
+} StorageOperation;
+</pre><a href="#section-4.5-2" class="pilcrow">¶</a>
+</div>
+<p id="section-4.5-3">An AppDataUpdate proposal for the SLS component with <code>op</code> set to <code>remove</code>
+removes the component from the group entirely, discarding the component
+state. How and whether previously stored items are deleted at a storage
+provider in that case is up to the application.<a href="#section-4.5-3" class="pilcrow">¶</a></p>
+<div id="semantics">
+<section id="section-4.5.1">
+          <h4 id="name-semantics">
+<a href="#section-4.5.1" class="section-number selfRef">4.5.1. </a><a href="#name-semantics" class="section-name selfRef">Semantics</a>
+          </h4>
+<span class="break"></span><dl class="dlParallel" id="section-4.5.1-1">
+            <dt id="section-4.5.1-1.1">add:</dt>
+            <dd style="margin-left: 1.5em" id="section-4.5.1-1.2">
+              <p id="section-4.5.1-1.2.1">Inserts the record into the record tree. The record is placed in the
+blank leaf with the lowest leaf index. If no leaf is blank, the tree is
+extended (<a href="#record-tree" class="auto internal xref">Section 4.4</a>). If a single commit covers multiple <code>add</code>
+operations, they are processed in the order in which the covering commit
+lists them, each taking the lowest leaf that is still blank. The sender
+does not choose the leaf index.<a href="#section-4.5.1-1.2.1" class="pilcrow">¶</a></p>
+</dd>
+            <dd class="break"></dd>
+<dt id="section-4.5.1-1.3">update:</dt>
+            <dd style="margin-left: 1.5em" id="section-4.5.1-1.4">
+              <p id="section-4.5.1-1.4.1">Replaces the record at <code>leaf_index</code> with the included record. The sender
+<span class="bcp14">MUST</span> sample a fresh <code>record_secret</code> for the new record. A fresh secret
+is required even if the stored item itself is unchanged.<a href="#section-4.5.1-1.4.1" class="pilcrow">¶</a></p>
+</dd>
+            <dd class="break"></dd>
+<dt id="section-4.5.1-1.5">remove:</dt>
+            <dd style="margin-left: 1.5em" id="section-4.5.1-1.6">
+              <p id="section-4.5.1-1.6.1">Blanks the leaf at <code>leaf_index</code>, after which the tree is truncated if
+possible (<a href="#record-tree" class="auto internal xref">Section 4.4</a>). Removing a record does not delete the stored
+item (see <a href="#deletion" class="auto internal xref">Section 6.3</a>).<a href="#section-4.5.1-1.6.1" class="pilcrow">¶</a></p>
+</dd>
+            <dd class="break"></dd>
+<dt id="section-4.5.1-1.7">rotate:</dt>
+            <dd style="margin-left: 1.5em" id="section-4.5.1-1.8">
+              <p id="section-4.5.1-1.8.1">Triggers a rotation (<a href="#rotation" class="auto internal xref">Section 4.6</a>).<a href="#section-4.5.1-1.8.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+</dl>
+</section>
+</div>
+<div id="validation">
+<section id="section-4.5.2">
+          <h4 id="name-validation">
+<a href="#section-4.5.2" class="section-number selfRef">4.5.2. </a><a href="#name-validation" class="section-name selfRef">Validation</a>
+          </h4>
+<p id="section-4.5.2-1">A commit covering SLS operations is invalid, and <span class="bcp14">MUST</span> be rejected, in the
+following cases:<a href="#section-4.5.2-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-4.5.2-2.1">
+              <p id="section-4.5.2-2.1.1">An <code>update</code> or <code>remove</code> operation references a leaf index that is out of
+range or a blank leaf.<a href="#section-4.5.2-2.1.1" class="pilcrow">¶</a></p>
+</li>
+            <li class="normal" id="section-4.5.2-2.2">
+              <p id="section-4.5.2-2.2.1">Two or more <code>update</code> or <code>remove</code> operations reference the same leaf
+index.<a href="#section-4.5.2-2.2.1" class="pilcrow">¶</a></p>
+</li>
+            <li class="normal" id="section-4.5.2-2.3">
+              <p id="section-4.5.2-2.3.1">More than one operation is a <code>rotate</code>.<a href="#section-4.5.2-2.3.1" class="pilcrow">¶</a></p>
+</li>
+            <li class="normal" id="section-4.5.2-2.4">
+              <p id="section-4.5.2-2.4.1">An <code>add</code> or <code>update</code> operation carries an EncryptedStorageRecord whose
+<code>wrap_type</code> is not <code>proposal</code>.<a href="#section-4.5.2-2.4.1" class="pilcrow">¶</a></p>
+</li>
+            <li class="normal" id="section-4.5.2-2.5">
+              <p id="section-4.5.2-2.5.1">Two <code>add</code> or <code>update</code> operations carry the same <code>wrap_id</code>.<a href="#section-4.5.2-2.5.1" class="pilcrow">¶</a></p>
+</li>
+            <li class="normal" id="section-4.5.2-2.6">
+              <p id="section-4.5.2-2.6.1">The <code>ciphertext</code> of an <code>add</code> or <code>update</code> operation does not decrypt
+under the key, nonce, and AAD determined by its WrapContext, or the
+resulting plaintext does not parse as a StorageRecord. Members
+necessarily decrypt every proposal-carried record while processing the
+covering commit, because the record tree commits to plaintext records.
+These checks are therefore objective and available to every member.<a href="#section-4.5.2-2.6.1" class="pilcrow">¶</a></p>
+</li>
+            <li class="normal" id="section-4.5.2-2.7">
+              <p id="section-4.5.2-2.7.1">A decrypted StorageRecord violates the algorithm requirements of
+<a href="#storage-records" class="auto internal xref">Section 4.3</a>: its <code>record_aead</code> or <code>digest_algorithm</code> is not one
+of the permitted values, the length of its <code>record_secret</code> does not
+match <code>KDF.Nh</code>, or the length of its <code>record_digest</code>
+does not match the output length of <code>digest_algorithm</code>.<a href="#section-4.5.2-2.7.1" class="pilcrow">¶</a></p>
+</li>
+            <li class="normal" id="section-4.5.2-2.8">
+              <p id="section-4.5.2-2.8.1">The commit covers both an SLS <code>add</code>, <code>update</code>, <code>remove</code>, or <code>rotate</code>
+operation and a proposal that adds or removes group members. This
+restriction keeps the interaction between membership changes and storage
+changes simple. It may be lifted in a future version of this document.<a href="#section-4.5.2-2.8.1" class="pilcrow">¶</a></p>
+</li>
+            <li class="normal" id="section-4.5.2-2.9">
+              <p id="section-4.5.2-2.9.1">The commit covers a <code>rotate</code> operation but does not include an
+UpdatePath. Without an UpdatePath, the <code>commit_secret</code> is all-zero
+(<span><a href="https://rfc-editor.org/rfc/rfc9420#section-12.4" class="relref">Section 12.4</a> of [<a href="#RFC9420" class="cite xref">RFC9420</a>]</span>) and an adversary in possession of the
+previous epoch's secrets could derive the new storage secret, defeating
+the purpose of the rotation.<a href="#section-4.5.2-2.9.1" class="pilcrow">¶</a></p>
+</li>
+            <li class="normal" id="section-4.5.2-2.10">
+              <p id="section-4.5.2-2.10.1">An SLS operation other than <code>remove</code> was sent by an external sender.
+Applications <span class="bcp14">MAY</span> further restrict which external senders are allowed to
+send <code>remove</code> operations.<a href="#section-4.5.2-2.10.1" class="pilcrow">¶</a></p>
+</li>
+          </ul>
+<p id="section-4.5.2-3">What receivers cannot verify is that a <code>record_secret</code> is fresh and that
+<code>record_digest</code> matches an item actually retrievable from a storage
+provider. Records are, however, attributable: every AppDataUpdate proposal
+is authenticated by MLS, so a record that turns out to be unusable can be
+traced to its signer by any member (see <a href="#security-considerations" class="auto internal xref">Section 6</a>).<a href="#section-4.5.2-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="processing">
+<section id="section-4.5.3">
+          <h4 id="name-processing">
+<a href="#section-4.5.3" class="section-number selfRef">4.5.3. </a><a href="#name-processing" class="section-name selfRef">Processing</a>
+          </h4>
+<p id="section-4.5.3-1">SLS operations are processed in the order in which the covering commit
+lists them, after the default proposal types as specified in
+<span>[<a href="#I-D.ietf-mls-extensions" class="cite xref">I-D.ietf-mls-extensions</a>]</span>, with the exception that a <code>rotate</code> operation
+is processed last. After all operations have been applied, each member
+recomputes <code>n_leaves</code> and <code>root_hash</code> and updates the component state. Note
+that proposals do not carry the new root hash. It is an output of
+processing, computed independently by every member.<a href="#section-4.5.3-1" class="pilcrow">¶</a></p>
+<p id="section-4.5.3-2">If the commit changes the group membership, an implicit rotation is
+processed last instead (<a href="#rotation" class="auto internal xref">Section 4.6</a>).<a href="#section-4.5.3-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="rotation">
+<section id="section-4.6">
+        <h3 id="name-rotation">
+<a href="#section-4.6" class="section-number selfRef">4.6. </a><a href="#name-rotation" class="section-name selfRef">Rotation</a>
+        </h3>
+<p id="section-4.6-1">A rotation moves the group to a new storage epoch. Rotations are triggered:<a href="#section-4.6-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-4.6-2.1">
+            <p id="section-4.6-2.1.1">implicitly, by any commit that adds or removes group members, including
+external commits, or<a href="#section-4.6-2.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-4.6-2.2">
+            <p id="section-4.6-2.2.1">explicitly, by a <code>rotate</code> operation.<a href="#section-4.6-2.2.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+<p id="section-4.6-3">A rotation is processed as follows:<a href="#section-4.6-3" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-4.6-4">
+<li id="section-4.6-4.1">
+            <p id="section-4.6-4.1.1">Set <code>storage_epoch</code> in the component state to the epoch created by the
+covering commit.<a href="#section-4.6-4.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-4.6-4.2">
+            <p id="section-4.6-4.2.1">Derive the new storage secret (<a href="#key-schedule" class="auto internal xref">Section 4.2</a>) in the new epoch.<a href="#section-4.6-4.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-4.6-4.3">
+            <p id="section-4.6-4.3.1">For every occupied leaf <code>i</code> of the record tree, where the record tree is
+in the state reached after all other operations covered by the commit
+have been processed, encrypt the record as an EncryptedStorageRecord
+with <code>wrap_type</code> set to <code>rotation</code>, using the key, nonce, and AAD derived
+from the WrapContext with <code>leaf_index</code> set to <code>i</code>
+(<a href="#record-encryption" class="auto internal xref">Section 4.3.2</a>).<a href="#section-4.6-4.3.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-4.6-4.4">
+            <p id="section-4.6-4.4.1">Delete the storage secret and all derived key material of the previous
+storage epoch.<a href="#section-4.6-4.4.1" class="pilcrow">¶</a></p>
+</li>
+        </ol>
+<p id="section-4.6-5">Rotation does not modify the record tree: <code>n_leaves</code> and <code>root_hash</code> are
+unchanged. Since step 3 is deterministic, every member that holds the
+plaintext records computes an identical set of ciphertexts, and the
+re-encrypted records do not need to be transmitted within the group.<a href="#section-4.6-5" class="pilcrow">¶</a></p>
+<p id="section-4.6-6">The member that created the commit <span class="bcp14">SHOULD</span> make the re-encrypted records
+available to the storage provider promptly. Any other member <span class="bcp14">MAY</span> do so as
+well. Because the ciphertexts are deterministic, concurrent uploads are
+idempotent. Note that the committer of an external commit joined the group
+through that commit and does not hold the plaintext records, so it cannot
+perform the upload. In that case the existing members are responsible for
+it.<a href="#section-4.6-6" class="pilcrow">¶</a></p>
+<p id="section-4.6-7">Members removed by the rotation's covering commit cannot derive the new
+storage secret. Members added by it can, which is what gives new members
+access to the stored data (see <a href="#joining" class="auto internal xref">Section 4.7</a>).<a href="#section-4.6-7" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="joining">
+<section id="section-4.7">
+        <h3 id="name-joining-a-group">
+<a href="#section-4.7" class="section-number selfRef">4.7. </a><a href="#name-joining-a-group" class="section-name selfRef">Joining a Group</a>
+        </h3>
+<p id="section-4.7-1">A new member learns the component state from the group context included in
+the Welcome or, for external commits, the GroupInfo. Because every commit
+that adds members triggers an implicit rotation, a new member <span class="bcp14">MUST</span> verify
+that <code>storage_epoch</code> equals the epoch it joined. A mismatch indicates that
+other members violated this specification.<a href="#section-4.7-1" class="pilcrow">¶</a></p>
+<p id="section-4.7-2">The new member can then derive the storage secret of the current storage
+epoch, fetch the encrypted records (for example from a storage provider),
+decrypt them, and verify the reconstructed record tree against <code>root_hash</code>.
+Until a previously existing member has uploaded the re-encrypted records of
+the current storage epoch, the fetched records may still be those of a
+previous storage epoch, which the new member cannot decrypt. The new member
+can only wait for the upload in that case.<a href="#section-4.7-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="operational-considerations">
+<section id="section-5">
+      <h2 id="name-operational-considerations">
+<a href="#section-5" class="section-number selfRef">5. </a><a href="#name-operational-considerations" class="section-name selfRef">Operational Considerations</a>
+      </h2>
+<div id="the-storage-provider">
+<section id="section-5.1">
+        <h3 id="name-the-storage-provider">
+<a href="#section-5.1" class="section-number selfRef">5.1. </a><a href="#name-the-storage-provider" class="section-name selfRef">The Storage Provider</a>
+        </h3>
+<p id="section-5.1-1">A storage provider stores, at minimum, the current EncryptedStorageRecord
+for each occupied leaf index and the stored items themselves. Because
+rotations replace all record ciphertexts at once, providers <span class="bcp14">SHOULD</span> track
+which storage epoch a stored record ciphertext belongs to and <span class="bcp14">SHOULD</span>
+replace the record set of a group atomically per storage epoch, so that
+clients never observe a mix of ciphertexts from different storage epochs.<a href="#section-5.1-1" class="pilcrow">¶</a></p>
+<p id="section-5.1-2">A storage provider cannot compute leaf hashes or verify the record tree,
+since leaves are computed over plaintext records. If the application makes
+the provider an external sender of the group, the provider can remove
+records, for example to enforce retention policies, by sending <code>remove</code>
+operations. Such removals take effect only once a member commits them, and
+they are visible to all members through the changed component state.<a href="#section-5.1-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="coordinating-uploads">
+<section id="section-5.2">
+        <h3 id="name-coordinating-uploads">
+<a href="#section-5.2" class="section-number selfRef">5.2. </a><a href="#name-coordinating-uploads" class="section-name selfRef">Coordinating Uploads</a>
+        </h3>
+<p id="section-5.2-1">The application <span class="bcp14">SHOULD</span> ensure that the upload of a stored item and the
+commit covering the corresponding <code>add</code> or <code>update</code> operation are
+coordinated, for example by uploading the stored item before sending the
+proposal, so that no record ever references a stored item that other
+members cannot retrieve.<a href="#section-5.2-1" class="pilcrow">¶</a></p>
+<p id="section-5.2-2">The wrapped record itself also has to reach the provider. A leaf index is
+assigned to an <code>add</code> operation only when the covering commit is processed,
+so the sender of an <code>add</code> or <code>update</code> operation <span class="bcp14">SHOULD</span> upload the
+EncryptedStorageRecord for its assigned leaf once the covering commit has
+been applied. Any other member <span class="bcp14">MAY</span> do so instead. All members hold the
+identical ciphertext after processing.<a href="#section-5.2-2" class="pilcrow">¶</a></p>
+<p id="section-5.2-3">If AppDataUpdate proposals are sent as PrivateMessage, the storage provider
+does not learn which operations took place. Applications that rely on the
+provider for garbage collection need to signal deletions to it separately.<a href="#section-5.2-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="security-considerations">
+<section id="section-6">
+      <h2 id="name-security-considerations">
+<a href="#section-6" class="section-number selfRef">6. </a><a href="#name-security-considerations" class="section-name selfRef">Security Considerations</a>
+      </h2>
+<div id="access-to-stored-data">
+<section id="section-6.1">
+        <h3 id="name-access-to-stored-data">
+<a href="#section-6.1" class="section-number selfRef">6.1. </a><a href="#name-access-to-stored-data" class="section-name selfRef">Access to Stored Data</a>
+        </h3>
+<p id="section-6.1-1">SLS ties the ability to decrypt storage records to knowledge of the current
+storage secret, which is derived from the MLS key schedule and therefore
+available exactly to the members of the group in the storage epoch.<a href="#section-6.1-1" class="pilcrow">¶</a></p>
+<p id="section-6.1-2">Members added to the group gain access to all storage records, including
+records created before they joined. In this respect stored data behaves
+differently from MLS messages, whose keys are not retroactively available
+to new members. Applications for which this is undesirable need to
+partition data across groups or apply additional access control above SLS.<a href="#section-6.1-2" class="pilcrow">¶</a></p>
+<p id="section-6.1-3">Members removed from the group cannot derive the storage secret of any
+subsequent storage epoch. However, a removed member knows every record
+secret,
+and potentially every stored item, that existed while it was a member.
+Rotation therefore protects records created or updated after the removal.
+It does not retroactively protect data the removed member already had
+access to. The same applies to an adversary that compromised a member's
+state: rotation with an UpdatePath denies the adversary the new storage
+secret, but every record secret of the compromised storage epoch, and thus
+every stored item referenced at that time, must be considered exposed.
+Fully recovering the confidentiality of a stored item after a compromise
+requires an <code>update</code> operation for its record: a fresh record secret and a
+re-encryption of the stored item itself.<a href="#section-6.1-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="forward-secrecy">
+<section id="section-6.2">
+        <h3 id="name-forward-secrecy">
+<a href="#section-6.2" class="section-number selfRef">6.2. </a><a href="#name-forward-secrecy" class="section-name selfRef">Forward Secrecy</a>
+        </h3>
+<p id="section-6.2-1">Members hold the key material of exactly one storage epoch and <span class="bcp14">MUST</span> delete
+the previous storage epoch's key material when processing a rotation.
+Forward secrecy of the storage layer is therefore granular to rotations
+rather than to MLS epochs: an adversary that compromises a member learns
+the records of the current storage epoch, regardless of how many MLS epochs
+it spans. Applications can bound this window by sending <code>rotate</code> operations
+periodically, at the cost of one re-encryption and upload of all records
+per rotation.<a href="#section-6.2-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="deletion">
+<section id="section-6.3">
+        <h3 id="name-deletion">
+<a href="#section-6.3" class="section-number selfRef">6.3. </a><a href="#name-deletion" class="section-name selfRef">Deletion</a>
+        </h3>
+<p id="section-6.3-1">Removing a record from the record tree does not erase anything by itself.
+Deleting a stored item requires all of the following, in combination:<a href="#section-6.3-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-6.3-2.1">
+            <p id="section-6.3-2.1.1">a <code>remove</code> operation, so that the group no longer vouches for the record,<a href="#section-6.3-2.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.3-2.2">
+            <p id="section-6.3-2.2.1">deletion of the stored item's ciphertext by the storage provider,<a href="#section-6.3-2.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.3-2.3">
+            <p id="section-6.3-2.3.1">deletion of the record and its key from members' local storage, and<a href="#section-6.3-2.3.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-6.3-2.4">
+            <p id="section-6.3-2.4.1">a rotation, so that the wrapping ciphertext of the removed record becomes
+undecryptable even if a copy of it survives at the provider.<a href="#section-6.3-2.4.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+<p id="section-6.3-3">None of these steps protects against a member or former member that
+retained a copy of the stored item.<a href="#section-6.3-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="tree-confidentiality">
+<section id="section-6.4">
+        <h3 id="name-confidentiality-of-the-reco">
+<a href="#section-6.4" class="section-number selfRef">6.4. </a><a href="#name-confidentiality-of-the-reco" class="section-name selfRef">Confidentiality of the Record Tree</a>
+        </h3>
+<p id="section-6.4-1">Leaf hashes are computed over plaintext storage records. A leaf hash is
+nevertheless not a useful oracle for an outsider: every storage record
+contains a fresh, uniformly random <code>record_secret</code> of <code>KDF.Nh</code> bytes, so
+an adversary cannot confirm a guess of the remaining record
+fields by recomputing the hash.<a href="#section-6.4-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="nonce-key-reuse">
+<section id="section-6.5">
+        <h3 id="name-nonce-and-key-reuse">
+<a href="#section-6.5" class="section-number selfRef">6.5. </a><a href="#name-nonce-and-key-reuse" class="section-name selfRef">Nonce and Key Reuse</a>
+        </h3>
+<p id="section-6.5-1">Each storage record encryption uses a key and nonce derived from a
+WrapContext that identifies one logical encryption. The <code>wrap_type</code> field
+separates proposal contexts from rotation contexts. A rotation occurs once
+per storage epoch and encrypts each occupied leaf once, so its contexts are
+unique. The deterministic rotation contexts allow every member to reproduce
+the same ciphertexts without transmitting them within the group.<a href="#section-6.5-1" class="pilcrow">¶</a></p>
+<p id="section-6.5-2">Proposal context uniqueness is probabilistic. An honest member samples an
+independent, uniformly random 256-bit <code>wrap_id</code> for every encryption. For q
+proposal encryptions in one storage epoch, the probability that any two
+identifiers collide is at most q * (q - 1) / 2^257. For example, even at
+q = 2^32 the probability is less than 2^-193. This bound includes
+encryptions for proposals that are never committed.<a href="#section-6.5-2" class="pilcrow">¶</a></p>
+<p id="section-6.5-3">For distinct WrapContexts, the security of the derived key and nonce pairs
+relies on the pseudorandom function security of the KDF. A collision in only
+the nonce does not cause nonce reuse because each context also derives a
+separate key. Reuse of a <code>wrap_id</code> within the same storage epoch, however,
+repeats both the key and the nonce and can compromise confidentiality and
+integrity. Implementations therefore <span class="bcp14">MUST</span> generate <code>wrap_id</code> values using a
+cryptographically secure source of randomness.<a href="#section-6.5-3" class="pilcrow">¶</a></p>
+<p id="section-6.5-4">Stored items are encrypted under a key and nonce derived from a
+single-use <code>record_secret</code>. As with <code>wrap_id</code> values, reusing a
+<code>record_secret</code> repeats both the key and the nonce, so the single-use
+requirement in <a href="#stored-item-encryption" class="auto internal xref">Section 4.3.1</a> carries the security of the
+construction.<a href="#section-6.5-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="malformed-records">
+<section id="section-6.6">
+        <h3 id="name-malformed-records">
+<a href="#section-6.6" class="section-number selfRef">6.6. </a><a href="#name-malformed-records" class="section-name selfRef">Malformed Records</a>
+        </h3>
+<p id="section-6.6-1">Records that do not decrypt, do not parse, or violate the algorithm
+requirements are rejected at validation time, since every member decrypts
+every proposal-carried record while processing the covering commit
+(<a href="#validation" class="auto internal xref">Section 4.5.2</a>). A member can still send a record that is well-formed but
+useless: one whose secret is stale or reused, or whose digest and location
+match no retrievable stored item. Other members can only detect this upon
+use, and the AppDataUpdate proposal that introduced the record identifies
+its sender through MLS authentication. Applications <span class="bcp14">SHOULD</span> define how such
+misbehavior is handled. This document intentionally does not attempt to
+make correct encryption verifiable by non-members.<a href="#section-6.6-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="metadata">
+<section id="section-6.7">
+        <h3 id="name-metadata">
+<a href="#section-6.7" class="section-number selfRef">6.7. </a><a href="#name-metadata" class="section-name selfRef">Metadata</a>
+        </h3>
+<p id="section-6.7-1">A storage provider observes the number of records, the sizes of records and
+stored items, and the timing of uploads, rotations, and deletions.
+Proposal <code>wrap_id</code> values are uniformly random and do not reveal the sender,
+the MLS epoch in which the record was created, or a per-sender encryption
+count. Applications <span class="bcp14">SHOULD</span> consider padding stored items and batching
+operations if this metadata is sensitive.<a href="#section-6.7-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="iana">
+<section id="section-7">
+      <h2 id="name-iana-considerations">
+<a href="#section-7" class="section-number selfRef">7. </a><a href="#name-iana-considerations" class="section-name selfRef">IANA Considerations</a>
+      </h2>
+<p id="section-7-1">This document requests the addition of one new entry to the MLS Component
+Types registry defined in <span>[<a href="#I-D.ietf-mls-extensions" class="cite xref">I-D.ietf-mls-extensions</a>]</span>:<a href="#section-7-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-7-2.1">
+          <p id="section-7-2.1.1">Value: TBD1<a href="#section-7-2.1.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-7-2.2">
+          <p id="section-7-2.2.1">Name: storage_layer_security<a href="#section-7-2.2.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-7-2.3">
+          <p id="section-7-2.3.1">Where: ES, GC<a href="#section-7-2.3.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-7-2.4">
+          <p id="section-7-2.4.1">Recommended: Y<a href="#section-7-2.4.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-7-2.5">
+          <p id="section-7-2.5.1">Reference: This document<a href="#section-7-2.5.1" class="pilcrow">¶</a></p>
+</li>
+      </ul>
+<p id="section-7-3">The Where value reflects that SLS derives secrets via the component
+exporter and stores component data in the GroupContext.<a href="#section-7-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="sec-normative-references">
+<section id="section-8">
+      <h2 id="name-normative-references">
+<a href="#section-8" class="section-number selfRef">8. </a><a href="#name-normative-references" class="section-name selfRef">Normative References</a>
+      </h2>
+<dl class="references">
+<dt id="I-D.ietf-mls-extensions">[I-D.ietf-mls-extensions]</dt>
+      <dd>
+<span class="refAuthor">Robert, R.</span>, <span class="refTitle">"The Messaging Layer Security (MLS) Extensions"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-ietf-mls-extensions-10</span>, <time datetime="2026-07-06" class="refDate">6 July 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-ietf-mls-extensions-10">https://datatracker.ietf.org/doc/html/draft-ietf-mls-extensions-10</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC2119">[RFC2119]</dt>
+      <dd>
+<span class="refAuthor">Bradner, S.</span>, <span class="refTitle">"Key words for use in RFCs to Indicate Requirement Levels"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 2119</span>, <span class="seriesInfo">DOI 10.17487/RFC2119</span>, <time datetime="1997-03" class="refDate">March 1997</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc2119">https://www.rfc-editor.org/rfc/rfc2119</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC6920">[RFC6920]</dt>
+      <dd>
+<span class="refAuthor">Farrell, S.</span>, <span class="refAuthor">Kutscher, D.</span>, <span class="refAuthor">Dannewitz, C.</span>, <span class="refAuthor">Ohlman, B.</span>, <span class="refAuthor">Keranen, A.</span>, and <span class="refAuthor">P. Hallam-Baker</span>, <span class="refTitle">"Naming Things with Hashes"</span>, <span class="seriesInfo">RFC 6920</span>, <span class="seriesInfo">DOI 10.17487/RFC6920</span>, <time datetime="2013-04" class="refDate">April 2013</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc6920">https://www.rfc-editor.org/rfc/rfc6920</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8174">[RFC8174]</dt>
+      <dd>
+<span class="refAuthor">Leiba, B.</span>, <span class="refTitle">"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 8174</span>, <span class="seriesInfo">DOI 10.17487/RFC8174</span>, <time datetime="2017-05" class="refDate">May 2017</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8174">https://www.rfc-editor.org/rfc/rfc8174</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8446">[RFC8446]</dt>
+      <dd>
+<span class="refAuthor">Rescorla, E.</span>, <span class="refTitle">"The Transport Layer Security (TLS) Protocol Version 1.3"</span>, <span class="seriesInfo">RFC 8446</span>, <span class="seriesInfo">DOI 10.17487/RFC8446</span>, <time datetime="2018-08" class="refDate">August 2018</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8446">https://www.rfc-editor.org/rfc/rfc8446</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC9180">[RFC9180]</dt>
+      <dd>
+<span class="refAuthor">Barnes, R.</span>, <span class="refAuthor">Bhargavan, K.</span>, <span class="refAuthor">Lipp, B.</span>, and <span class="refAuthor">C. Wood</span>, <span class="refTitle">"Hybrid Public Key Encryption"</span>, <span class="seriesInfo">RFC 9180</span>, <span class="seriesInfo">DOI 10.17487/RFC9180</span>, <time datetime="2022-02" class="refDate">February 2022</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc9180">https://www.rfc-editor.org/rfc/rfc9180</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC9420">[RFC9420]</dt>
+    <dd>
+<span class="refAuthor">Barnes, R.</span>, <span class="refAuthor">Beurdouche, B.</span>, <span class="refAuthor">Robert, R.</span>, <span class="refAuthor">Millican, J.</span>, <span class="refAuthor">Omara, E.</span>, and <span class="refAuthor">K. Cohn-Gordon</span>, <span class="refTitle">"The Messaging Layer Security (MLS) Protocol"</span>, <span class="seriesInfo">RFC 9420</span>, <span class="seriesInfo">DOI 10.17487/RFC9420</span>, <time datetime="2023-07" class="refDate">July 2023</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc9420">https://www.rfc-editor.org/rfc/rfc9420</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+</dl>
+</section>
+</div>
+<div id="acknowledgments">
+<section id="appendix-A">
+      <h2 id="name-acknowledgments">
+<a href="#name-acknowledgments" class="section-name selfRef">Acknowledgments</a>
+      </h2>
+<p id="appendix-A-1">TODO acknowledge.<a href="#appendix-A-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="authors-addresses">
+<section id="appendix-B">
+      <h2 id="name-authors-addresses">
+<a href="#name-authors-addresses" class="section-name selfRef">Authors' Addresses</a>
+      </h2>
+<address class="vcard">
+        <div dir="auto" class="left"><span class="fn nameRole">Konrad Kohbrok</span></div>
+<div dir="auto" class="left"><span class="org">Phoenix R&amp;D</span></div>
+<div class="email">
+<span>Email:</span>
+<a href="mailto:konrad@ratchet.ing" class="email">konrad@ratchet.ing</a>
+</div>
+</address>
+<address class="vcard">
+        <div dir="auto" class="left"><span class="fn nameRole">Raphael Robert</span></div>
+<div dir="auto" class="left"><span class="org">Phoenix R&amp;D</span></div>
+<div class="email">
+<span>Email:</span>
+<a href="mailto:ietf@raphaelrobert.com" class="email">ietf@raphaelrobert.com</a>
+</div>
+</address>
+</section>
+</div>
+<script>const toc = document.getElementById("toc");
+toc.querySelector("h2").addEventListener("click", e => {
+  toc.classList.toggle("active");
+});
+toc.querySelector("nav").addEventListener("click", e => {
+  toc.classList.remove("active");
+});
+</script>
+</body>
+</html>
